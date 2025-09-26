@@ -299,13 +299,13 @@ export default function GroundwaterMonitoringApp() {
       <StatusBar barStyle="light-content" backgroundColor="#1976D2" />
       
       {/* Header */}
-      <LinearGradient colors={['#1976D2', '#2196F3']} style={styles.header}>
+      <View style={styles.header}>
         <Text style={styles.headerTitle}>Groundwater Monitor</Text>
         <Text style={styles.headerSubtitle}>Real-Time DWLR Network</Text>
         <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
           <Ionicons name="refresh" size={24} color="#fff" />
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
 
       {/* Error Message */}
       {error && (

@@ -173,11 +173,53 @@ export default function MapScreen() {
     });
   };
 
-  if (loading) {
+  if (Platform.OS === 'web') {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
-        <Text style={styles.loadingText}>Loading Map Data...</Text>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Groundwater Map</Text>
+          <TouchableOpacity onPress={loadStations} style={styles.refreshButton}>
+            <Ionicons name="refresh" size={24} color="#2196F3" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.webFallbackContainer}>
+          <Ionicons name="map-outline" size={80} color="#ccc" />
+          <Text style={styles.webFallbackTitle}>Map View</Text>
+          <Text style={styles.webFallbackText}>
+            Interactive map with groundwater stations is available on mobile devices.
+          </Text>
+          <Text style={styles.webFallbackText}>
+            Open this app on your mobile device to view the full map experience with:
+          </Text>
+          <View style={styles.featureList}>
+            <Text style={styles.featureItem}>• Interactive station markers</Text>
+            <Text style={styles.featureItem}>• Real-time water level indicators</Text>
+            <Text style={styles.featureItem}>• GPS location services</Text>
+            <Text style={styles.featureItem}>• Trend-based color coding</Text>
+            <Text style={styles.featureItem}>• Station detail modal views</Text>
+          </View>
+          
+          <View style={styles.stationsList}>
+            <Text style={styles.stationsListTitle}>Available Stations ({stations.length})</Text>
+            {stations.slice(0, 5).map(station => (
+              <View key={station.station_id} style={styles.stationListItem}>
+                <View>
+                  <Text style={styles.stationListName}>{station.name}</Text>
+                  <Text style={styles.stationListLocation}>{station.district}, {station.state}</Text>
+                </View>
+                <View style={styles.stationListLevel}>
+                  <Text style={styles.levelText}>{station.current_level}m</Text>
+                  <Ionicons 
+                    name={station.trend === 'rising' ? 'trending-up' : station.trend === 'falling' ? 'trending-down' : 'remove'} 
+                    size={16} 
+                    color={station.trend === 'rising' ? '#4CAF50' : station.trend === 'falling' ? '#F44336' : '#FF9800'} 
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
       </SafeAreaView>
     );
   }

@@ -11,7 +11,18 @@ import {
   Alert,
   Dimensions
 } from 'react-native';
-import MapView, { Marker, Region, Callout } from 'react-native-maps';
+import { Platform } from 'react-native';
+
+// Conditional import for mobile-only maps
+let MapView: any, Marker: any, Region: any, Callout: any;
+
+if (Platform.OS !== 'web') {
+  const Maps = require('react-native-maps');
+  MapView = Maps.default;
+  Marker = Maps.Marker;
+  Region = Maps.Region;
+  Callout = Maps.Callout;
+}
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';

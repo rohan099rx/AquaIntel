@@ -19,6 +19,8 @@
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
+    "@types/leaflet": "^1.9.20",
+    "axios": "^1.12.2",
     "expo": "^54.0.10",
     "expo-blur": "~14.1.5",
     "expo-constants": "~17.1.7",
@@ -34,11 +36,15 @@
     "expo-symbols": "~0.4.5",
     "expo-system-ui": "~5.0.10",
     "expo-web-browser": "~14.2.0",
+    "leaflet": "^1.9.4",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "react-leaflet": "^5.0.0",
     "react-native": "0.79.5",
     "react-native-chart-kit": "^6.12.0",
+    "react-native-charts-kit": "^1.0.25",
     "react-native-dotenv": "^3.4.11",
+    "react-native-geolocation-service": "^5.3.1",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-gifted-charts": "^1.4.64",
     "react-native-linear-gradient": "^2.8.3",
@@ -48,7 +54,7 @@
     "react-native-screens": "~4.11.1",
     "react-native-svg": "^15.13.0",
     "react-native-web": "~0.20.0",
-    "react-native-webview": "13.13.5"
+    "react-native-webview": "^13.16.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

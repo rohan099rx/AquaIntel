@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Dimensions,
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LineChart, BarChart } from "react-native-chart-kit";
 
 // Mock data for charts

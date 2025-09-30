@@ -9,84 +9,18 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LineChart, BarChart } from "react-native-chart-kit";
-
-// Mock data for charts
-const MOCK_STATIONS = [
-  {
-    station_id: "DWLR001",
-    name: "Mumbai Central Station",
-    state: "Maharashtra",
-    district: "Mumbai",
-    current_level: 12.5,
-    trend: "rising",
-    latitude: 19.076,
-    longitude: 72.8777,
-    historical_data: [10.2, 10.8, 11.5, 12.0, 12.5],
-    monthly_data: [
-      9.8, 10.2, 10.5, 10.9, 11.3, 11.8, 12.2, 12.5, 12.3, 12.1, 11.9, 11.7,
-    ],
-  },
-  {
-    station_id: "DWLR002",
-    name: "Bangalore Main Station",
-    state: "Karnataka",
-    district: "Bangalore",
-    current_level: 8.3,
-    trend: "falling",
-    latitude: 12.9716,
-    longitude: 77.5946,
-    historical_data: [10.1, 9.8, 9.2, 8.7, 8.3],
-    monthly_data: [
-      10.2, 10.0, 9.8, 9.6, 9.4, 9.2, 9.0, 8.8, 8.7, 8.6, 8.4, 8.3,
-    ],
-  },
-  {
-    station_id: "DWLR003",
-    name: "Delhi DWLR Station",
-    state: "Delhi",
-    district: "New Delhi",
-    current_level: 15.7,
-    trend: "stable",
-    latitude: 28.7041,
-    longitude: 77.1025,
-    historical_data: [15.5, 15.6, 15.7, 15.6, 15.7],
-    monthly_data: [
-      15.3, 15.4, 15.5, 15.5, 15.6, 15.7, 15.8, 15.7, 15.7, 15.6, 15.7, 15.7,
-    ],
-  },
-  {
-    station_id: "DWLR004",
-    name: "Chennai Coastal Station",
-    state: "Tamil Nadu",
-    district: "Chennai",
-    current_level: 6.2,
-    trend: "rising",
-    latitude: 13.0827,
-    longitude: 80.2707,
-    historical_data: [5.1, 5.4, 5.7, 6.0, 6.2],
-    monthly_data: [4.8, 5.0, 5.2, 5.4, 5.6, 5.8, 6.0, 6.2, 6.3, 6.4, 6.3, 6.2],
-  },
-  {
-    station_id: "DWLR005",
-    name: "Jaipur Desert Station",
-    state: "Rajasthan",
-    district: "Jaipur",
-    current_level: 22.8,
-    trend: "falling",
-    latitude: 26.9124,
-    longitude: 75.7873,
-    historical_data: [24.5, 24.0, 23.5, 23.1, 22.8],
-    monthly_data: [
-      25.0, 24.8, 24.5, 24.2, 24.0, 23.7, 23.5, 23.3, 23.1, 22.9, 22.8, 22.8,
-    ],
-  },
-];
+import { LineChart, BarChart, PieChart } from "react-native-chart-kit";
+import {
+  MOCK_STATIONS,
+  getStateStatistics,
+  getStationsByTrend,
+  getAverageWaterLevel,
+} from "../data/mockStations";
 
 export default function ChartsScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedStationIndex, setSelectedStationIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState("yearly");
+  const [activeTab, setActiveTab] = useState("overview");
   const screenWidth = Dimensions.get("window").width;
 
   useEffect(() => {
@@ -99,6 +33,8 @@ export default function ChartsScreen() {
   }, []);
 
   const selectedStation = MOCK_STATIONS[selectedStationIndex];
+  const stateStats = getStateStatistics();
+  const averageLevel = getAverageWaterLevel();
 
   const chartConfig = {
     backgroundGradientFrom: "#ffffff",
@@ -110,17 +46,125 @@ export default function ChartsScreen() {
     decimalPlaces: 1,
   };
 
-  // Trend status color
+  // Prepare trend distribution data
+  const prepareTrendData = () => {
+    const risingCount = getStationsByTrend("rising").length;
+    const fallingCount = getStationsByTrend("falling").length;
+    const stableCount = getStationsByTrend("stable").length;
+
+    return [
+      {
+        name: "Rising",
+        population: risingCount,
+        color: "#4CAF50",
+        legendFontColor: "#7F7F7F",
+        legendFontSize: 15,
+      },
+      {
+        name: "Falling",
+        population: fallingCount,
+        color: "#F44336",
+        legendFontColor: "#7F7F7F",
+        legendFontSize: 15,
+      },
+      {
+        name: "Stable",
+        population: stableCount,
+        color: "#2196F3",
+        legendFontColor: "#7F7F7F",
+        legendFontSize: 15,
+      },
+    ];
+  };
+
+  // Prepare state comparison data
+  const prepareStateComparisonData = () => {
+    const topStates = stateStats.slice(0, 8); // Top 8 states
+    return {
+      labels: topStates.map((s) => s.state.substring(0, 8)),
+      datasets: [
+        {
+          data: topStates.map((s) => s.averageLevel),
+        },
+      ],
+    };
+  };
+
+  // Prepare monthly trend data for selected station
+  const prepareMonthlyData = () => {
+    const monthlyData = selectedStation.historical_data.slice(-30); // Last 30 days
+    const groupedByWeek: { [key: string]: number[] } = {};
+
+    monthlyData.forEach((data) => {
+      const week = Math.floor(new Date(data.date).getDate() / 7);
+      const weekKey = `Week ${week + 1}`;
+      if (!groupedByWeek[weekKey]) {
+        groupedByWeek[weekKey] = [];
+      }
+      groupedByWeek[weekKey].push(data.level);
+    });
+
+    const labels = Object.keys(groupedByWeek);
+    const averages = labels.map((week) => {
+      const values = groupedByWeek[week];
+      return values.reduce((sum, val) => sum + val, 0) / values.length;
+    });
+
+    return {
+      labels,
+      datasets: [{ data: averages }],
+    };
+  };
+
+  // Prepare water quality distribution
+  const prepareQualityData = () => {
+    const qualityCounts = { excellent: 0, good: 0, fair: 0, poor: 0 };
+    MOCK_STATIONS.forEach((station) => {
+      qualityCounts[station.water_quality.status]++;
+    });
+
+    return [
+      {
+        name: "Excellent",
+        population: qualityCounts.excellent,
+        color: "#4CAF50",
+        legendFontColor: "#7F7F7F",
+        legendFontSize: 12,
+      },
+      {
+        name: "Good",
+        population: qualityCounts.good,
+        color: "#8BC34A",
+        legendFontColor: "#7F7F7F",
+        legendFontSize: 12,
+      },
+      {
+        name: "Fair",
+        population: qualityCounts.fair,
+        color: "#FFC107",
+        legendFontColor: "#7F7F7F",
+        legendFontSize: 12,
+      },
+      {
+        name: "Poor",
+        population: qualityCounts.poor,
+        color: "#F44336",
+        legendFontColor: "#7F7F7F",
+        legendFontSize: 12,
+      },
+    ];
+  };
+
   const getTrendColor = (trend: string): string => {
     switch (trend) {
       case "rising":
-        return "#4CAF50"; // Green
+        return "#4CAF50";
       case "falling":
-        return "#F44336"; // Red
+        return "#F44336";
       case "stable":
-        return "#FF9800"; // Orange
+        return "#FF9800";
       default:
-        return "#2196F3"; // Blue
+        return "#2196F3";
     }
   };
 
@@ -140,7 +184,7 @@ export default function ChartsScreen() {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
-        <Text style={styles.loadingText}>Loading Chart Data...</Text>
+        <Text style={styles.loadingText}>Loading Analytics Data...</Text>
       </SafeAreaView>
     );
   }
@@ -148,227 +192,293 @@ export default function ChartsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Groundwater Analytics</Text>
+        <Text style={styles.headerTitle}>DWLR Analytics Dashboard</Text>
+        <Text style={styles.headerSubtitle}>100 Monitoring Stations</Text>
       </View>
 
       <ScrollView style={styles.scrollView}>
-        {/* Station Selector */}
-        <View style={styles.stationSelector}>
-          <TouchableOpacity onPress={prevStation} style={styles.navButton}>
-            <Text style={styles.navButtonText}>◀</Text>
-          </TouchableOpacity>
-
-          <View style={styles.stationInfo}>
-            <Text style={styles.stationName}>{selectedStation.name}</Text>
-            <Text style={styles.stationLocation}>
-              {selectedStation.district}, {selectedStation.state}
-            </Text>
-            <View style={styles.levelContainer}>
-              <Text style={styles.levelLabel}>Current Level: </Text>
-              <Text style={styles.levelValue}>
-                {selectedStation.current_level}m
+        {/* Summary Stats */}
+        <View style={styles.summaryContainer}>
+          <View style={styles.summaryRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{MOCK_STATIONS.length}</Text>
+              <Text style={styles.statLabel}>Total Stations</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>
+                {MOCK_STATIONS.filter((s) => s.status === "active").length}
               </Text>
-              <View
-                style={[
-                  styles.trendBadge,
-                  { backgroundColor: getTrendColor(selectedStation.trend) },
-                ]}
-              >
-                <Text style={styles.trendText}>{selectedStation.trend}</Text>
-              </View>
+              <Text style={styles.statLabel}>Active Stations</Text>
             </View>
           </View>
-
-          <TouchableOpacity onPress={nextStation} style={styles.navButton}>
-            <Text style={styles.navButtonText}>▶</Text>
-          </TouchableOpacity>
+          <View style={styles.summaryRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{averageLevel}m</Text>
+              <Text style={styles.statLabel}>Average Level</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stateStats.length}</Text>
+              <Text style={styles.statLabel}>States Covered</Text>
+            </View>
+          </View>
         </View>
 
         {/* Chart Type Tabs */}
         <View style={styles.tabsContainer}>
           <TouchableOpacity
-            style={[styles.tab, activeTab === "yearly" && styles.activeTab]}
-            onPress={() => setActiveTab("yearly")}
+            style={[styles.tab, activeTab === "overview" && styles.activeTab]}
+            onPress={() => setActiveTab("overview")}
           >
             <Text
               style={[
                 styles.tabText,
-                activeTab === "yearly" && styles.activeTabText,
+                activeTab === "overview" && styles.activeTabText,
               ]}
             >
-              Yearly Trend
+              Overview
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tab, activeTab === "monthly" && styles.activeTab]}
-            onPress={() => setActiveTab("monthly")}
+            style={[styles.tab, activeTab === "stations" && styles.activeTab]}
+            onPress={() => setActiveTab("stations")}
           >
             <Text
               style={[
                 styles.tabText,
-                activeTab === "monthly" && styles.activeTabText,
+                activeTab === "stations" && styles.activeTabText,
               ]}
             >
-              Monthly Data
+              Stations
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tab, activeTab === "compare" && styles.activeTab]}
-            onPress={() => setActiveTab("compare")}
+            style={[styles.tab, activeTab === "regional" && styles.activeTab]}
+            onPress={() => setActiveTab("regional")}
           >
             <Text
               style={[
                 styles.tabText,
-                activeTab === "compare" && styles.activeTabText,
+                activeTab === "regional" && styles.activeTabText,
               ]}
             >
-              Compare
+              Regional
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Chart Content based on Tab */}
+        {/* Chart Content */}
         <View style={styles.chartContainer}>
-          {activeTab === "yearly" && (
-            <View style={styles.chartCard}>
-              <Text style={styles.chartTitle}>5-Year Water Level Trend</Text>
-              <LineChart
-                data={{
-                  labels: ["2021", "2022", "2023", "2024", "2025"],
-                  datasets: [
-                    {
-                      data: selectedStation.historical_data,
-                      color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
-                      strokeWidth: 2,
-                    },
-                  ],
-                }}
-                width={screenWidth - 40}
-                height={220}
-                chartConfig={chartConfig}
-                bezier
-                style={styles.chart}
-                yAxisSuffix="m"
-              />
-              <Text style={styles.chartDescription}>
-                Water levels{" "}
-                {selectedStation.trend === "rising"
-                  ? "increased"
-                  : selectedStation.trend === "falling"
-                  ? "decreased"
-                  : "remained stable"}{" "}
-                over the past 5 years.
-              </Text>
-            </View>
+          {activeTab === "overview" && (
+            <>
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>
+                  Water Level Trend Distribution
+                </Text>
+                <PieChart
+                  data={prepareTrendData()}
+                  width={screenWidth - 40}
+                  height={220}
+                  chartConfig={chartConfig}
+                  accessor="population"
+                  backgroundColor="transparent"
+                  paddingLeft="15"
+                  absolute
+                />
+                <Text style={styles.chartDescription}>
+                  Distribution of water level trends across all{" "}
+                  {MOCK_STATIONS.length} monitoring stations.
+                </Text>
+              </View>
+
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>
+                  Water Quality Distribution
+                </Text>
+                <PieChart
+                  data={prepareQualityData()}
+                  width={screenWidth - 40}
+                  height={220}
+                  chartConfig={chartConfig}
+                  accessor="population"
+                  backgroundColor="transparent"
+                  paddingLeft="15"
+                  absolute
+                />
+                <Text style={styles.chartDescription}>
+                  Overall water quality assessment across all monitoring
+                  stations.
+                </Text>
+              </View>
+            </>
           )}
 
-          {activeTab === "monthly" && (
-            <View style={styles.chartCard}>
-              <Text style={styles.chartTitle}>Monthly Water Levels (2025)</Text>
-              <LineChart
-                data={{
-                  labels: [
-                    "Jan",
-                    "Feb",
-                    "Mar",
-                    "Apr",
-                    "May",
-                    "Jun",
-                    "Jul",
-                    "Aug",
-                    "Sep",
-                    "Oct",
-                    "Nov",
-                    "Dec",
-                  ],
-                  datasets: [
-                    {
-                      data: selectedStation.monthly_data,
-                      color: (opacity = 1) => `rgba(75, 192, 192, ${opacity})`,
-                      strokeWidth: 2,
-                    },
-                  ],
-                }}
-                width={screenWidth - 40}
-                height={220}
-                chartConfig={{
-                  ...chartConfig,
-                  color: (opacity = 1) => `rgba(75, 192, 192, ${opacity})`,
-                }}
-                bezier
-                style={styles.chart}
-                yAxisSuffix="m"
-              />
-              <Text style={styles.chartDescription}>
-                Monthly fluctuations showing {selectedStation.trend} trend in
-                water levels throughout 2025.
-              </Text>
-            </View>
+          {activeTab === "stations" && (
+            <>
+              {/* Station Selector */}
+              <View style={styles.stationSelector}>
+                <TouchableOpacity
+                  onPress={prevStation}
+                  style={styles.navButton}
+                >
+                  <Text style={styles.navButtonText}>◀</Text>
+                </TouchableOpacity>
+
+                <View style={styles.stationInfo}>
+                  <Text style={styles.stationName}>{selectedStation.name}</Text>
+                  <Text style={styles.stationLocation}>
+                    {selectedStation.district}, {selectedStation.state}
+                  </Text>
+                  <View style={styles.levelContainer}>
+                    <Text style={styles.levelLabel}>Current Level: </Text>
+                    <Text style={styles.levelValue}>
+                      {selectedStation.current_level}m
+                    </Text>
+                    <View
+                      style={[
+                        styles.trendBadge,
+                        {
+                          backgroundColor: getTrendColor(selectedStation.trend),
+                        },
+                      ]}
+                    >
+                      <Text style={styles.trendText}>
+                        {selectedStation.trend}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={nextStation}
+                  style={styles.navButton}
+                >
+                  <Text style={styles.navButtonText}>▶</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>
+                  Monthly Trend - {selectedStation.name}
+                </Text>
+                <LineChart
+                  data={prepareMonthlyData()}
+                  width={screenWidth - 40}
+                  height={220}
+                  chartConfig={{
+                    ...chartConfig,
+                    color: (opacity = 1) => `rgba(75, 192, 192, ${opacity})`,
+                  }}
+                  bezier
+                  style={styles.chart}
+                  yAxisSuffix="m"
+                />
+                <Text style={styles.chartDescription}>
+                  Weekly average water levels for the selected station over the
+                  past month.
+                </Text>
+              </View>
+
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>Water Quality Metrics</Text>
+                <View style={styles.qualityMetrics}>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>pH Level</Text>
+                    <Text style={styles.metricValue}>
+                      {selectedStation.water_quality.pH.toFixed(1)}
+                    </Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Dissolved Oxygen</Text>
+                    <Text style={styles.metricValue}>
+                      {selectedStation.water_quality.dissolved_oxygen.toFixed(
+                        1
+                      )}{" "}
+                      mg/L
+                    </Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Quality Index</Text>
+                    <Text style={styles.metricValue}>
+                      {selectedStation.water_quality.quality_index}/100
+                    </Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Status</Text>
+                    <Text
+                      style={[
+                        styles.metricValue,
+                        { color: getTrendColor(selectedStation.trend) },
+                      ]}
+                    >
+                      {selectedStation.water_quality.status}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </>
           )}
 
-          {activeTab === "compare" && (
-            <View style={styles.chartCard}>
-              <Text style={styles.chartTitle}>Regional Comparison</Text>
-              <BarChart
-                data={{
-                  labels: MOCK_STATIONS.map((s) => s.name.split(" ")[0]),
-                  datasets: [
-                    {
-                      data: MOCK_STATIONS.map((s) => s.current_level),
-                    },
-                  ],
-                }}
-                width={screenWidth - 40}
-                height={220}
-                yAxisLabel=""
-                yAxisSuffix="m"
-                chartConfig={{
-                  ...chartConfig,
-                  color: (opacity = 1) => `rgba(255, 99, 132, ${opacity})`,
-                }}
-                style={styles.chart}
-                showValuesOnTopOfBars={true}
-              />
-              <Text style={styles.chartDescription}>
-                Comparison of current water levels across different monitoring
-                stations.
-              </Text>
-            </View>
+          {activeTab === "regional" && (
+            <>
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>
+                  Average Water Levels by State
+                </Text>
+                <BarChart
+                  data={prepareStateComparisonData()}
+                  width={screenWidth - 40}
+                  height={220}
+                  yAxisLabel=""
+                  yAxisSuffix="m"
+                  chartConfig={{
+                    ...chartConfig,
+                    color: (opacity = 1) => `rgba(255, 99, 132, ${opacity})`,
+                  }}
+                  style={styles.chart}
+                  showValuesOnTopOfBars={true}
+                />
+                <Text style={styles.chartDescription}>
+                  Comparison of average water levels across different states.
+                </Text>
+              </View>
+
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>
+                  State-wise Station Distribution
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.stateTable}>
+                    <View style={styles.tableHeader}>
+                      <Text style={styles.tableHeaderCell}>State</Text>
+                      <Text style={styles.tableHeaderCell}>Stations</Text>
+                      <Text style={styles.tableHeaderCell}>Avg Level</Text>
+                    </View>
+                    {stateStats.map((stat, index) => (
+                      <View key={index} style={styles.tableRow}>
+                        <Text style={styles.tableCell}>{stat.state}</Text>
+                        <Text style={styles.tableCell}>
+                          {stat.stationCount}
+                        </Text>
+                        <Text style={styles.tableCell}>
+                          {stat.averageLevel}m
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+            </>
           )}
-        </View>
-
-        {/* Insights and Analysis */}
-        <View style={styles.insightContainer}>
-          <Text style={styles.insightTitle}>Water Level Insights</Text>
-
-          <View style={styles.insightCard}>
-            <Text style={styles.insightHeading}>Trend Analysis</Text>
-            <Text style={styles.insightText}>
-              {selectedStation.trend === "rising"
-                ? `Water levels at ${selectedStation.name} are rising, which may indicate increased rainfall or reduced extraction in the area.`
-                : selectedStation.trend === "falling"
-                ? `Water levels at ${selectedStation.name} are falling, suggesting potential over-extraction or reduced recharge in the area.`
-                : `Water levels at ${selectedStation.name} are stable, indicating a balance between recharge and extraction.`}
-            </Text>
-          </View>
-
-          <View style={styles.insightCard}>
-            <Text style={styles.insightHeading}>Recommendations</Text>
-            <Text style={styles.insightText}>
-              {selectedStation.trend === "rising"
-                ? "• Monitor for potential flooding risks\n• Consider increasing controlled extraction\n• Ensure proper drainage systems"
-                : selectedStation.trend === "falling"
-                ? "• Implement water conservation measures\n• Reduce extraction rates\n• Promote rainwater harvesting"
-                : "• Maintain current water management practices\n• Continue regular monitoring\n• Implement sustainable usage policies"}
-            </Text>
-          </View>
         </View>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Data last updated: September 2025
+            Data from {MOCK_STATIONS.length} DWLR stations across India
+          </Text>
+          <Text style={styles.footerText}>
+            Last updated: {new Date().toLocaleDateString()}
           </Text>
         </View>
       </ScrollView>
@@ -393,30 +503,119 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "center",
+    backgroundColor: "#2196F3",
+    paddingVertical: 20,
+    paddingHorizontal: 20,
     alignItems: "center",
-    paddingVertical: 15,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
   },
   headerTitle: {
+    color: "#fff",
     fontSize: 20,
     fontWeight: "bold",
-    color: "#333",
+  },
+  headerSubtitle: {
+    color: "#fff",
+    fontSize: 14,
+    opacity: 0.8,
+    marginTop: 5,
   },
   scrollView: {
     flex: 1,
+  },
+  summaryContainer: {
+    padding: 10,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: "white",
+    padding: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    marginHorizontal: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#2196F3",
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 5,
+  },
+  tabsContainer: {
+    flexDirection: "row",
+    marginHorizontal: 10,
+    marginBottom: 10,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#e0e0e0",
+    borderWidth: 1,
+    borderColor: "#ccc",
+  },
+  activeTab: {
+    backgroundColor: "#2196F3",
+  },
+  tabText: {
+    fontWeight: "500",
+    color: "#555",
+  },
+  activeTabText: {
+    color: "#fff",
+  },
+  chartContainer: {
+    padding: 10,
+  },
+  chartCard: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  chartTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  chart: {
+    marginVertical: 8,
+    borderRadius: 16,
+  },
+  chartDescription: {
+    fontSize: 14,
+    color: "#666",
+    fontStyle: "italic",
+    textAlign: "center",
+    marginTop: 10,
   },
   stationSelector: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "#fff",
-    margin: 10,
     padding: 15,
     borderRadius: 8,
+    marginBottom: 15,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
@@ -442,7 +641,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   stationName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
     color: "#333",
     textAlign: "center",
@@ -478,100 +677,60 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
   },
-  tabsContainer: {
+  qualityMetrics: {
     flexDirection: "row",
-    marginHorizontal: 10,
-    marginBottom: 10,
+    flexWrap: "wrap",
+    justifyContent: "space-around",
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
+  metricItem: {
     alignItems: "center",
-    backgroundColor: "#e0e0e0",
-    borderWidth: 1,
-    borderColor: "#ccc",
+    marginVertical: 10,
+    minWidth: "40%",
   },
-  activeTab: {
-    backgroundColor: "#2196F3",
-  },
-  tabText: {
-    fontWeight: "500",
-    color: "#555",
-  },
-  activeTabText: {
-    color: "#fff",
-  },
-  chartContainer: {
-    padding: 10,
-  },
-  chartCard: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    padding: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  chart: {
-    marginVertical: 8,
-    borderRadius: 16,
-  },
-  chartDescription: {
+  metricLabel: {
     fontSize: 14,
     color: "#666",
-    fontStyle: "italic",
-    textAlign: "center",
-    marginTop: 10,
+    marginBottom: 5,
   },
-  insightContainer: {
-    padding: 10,
-    marginTop: 5,
-  },
-  insightTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  insightCard: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  insightHeading: {
+  metricValue: {
     fontSize: 16,
     fontWeight: "bold",
     color: "#333",
-    marginBottom: 8,
   },
-  insightText: {
-    fontSize: 14,
-    color: "#555",
-    lineHeight: 22,
+  stateTable: {
+    minWidth: 300,
+  },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#f5f5f5",
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+  },
+  tableHeaderCell: {
+    flex: 1,
+    fontWeight: "bold",
+    textAlign: "center",
+    color: "#333",
+  },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: 8,
+    paddingHorizontal: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  tableCell: {
+    flex: 1,
+    textAlign: "center",
+    color: "#666",
   },
   footer: {
-    padding: 15,
+    padding: 20,
     alignItems: "center",
   },
   footerText: {
     fontSize: 12,
     color: "#999",
-    fontStyle: "italic",
+    textAlign: "center",
   },
 });

@@ -1,49 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Text, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-// Mock station data in case API call fails
-const MOCK_STATIONS = [
-  {
-    station_id: "DWLR001",
-    name: "Mumbai Central Station",
-    state: "Maharashtra",
-    district: "Mumbai",
-    current_level: 12.5,
-    trend: "rising",
-    latitude: 19.076,
-    longitude: 72.8777,
-    last_updated: new Date().toISOString(),
-  },
-  {
-    station_id: "DWLR002",
-    name: "Bangalore Main Station",
-    state: "Karnataka",
-    district: "Bangalore",
-    current_level: 8.3,
-    trend: "falling",
-    latitude: 12.9716,
-    longitude: 77.5946,
-    last_updated: new Date().toISOString(),
-  },
-  {
-    station_id: "DWLR003",
-    name: "Delhi DWLR Station",
-    state: "Delhi",
-    district: "New Delhi",
-    current_level: 15.7,
-    trend: "stable",
-    latitude: 28.7041,
-    longitude: 77.1025,
-    last_updated: new Date().toISOString(),
-  },
-];
+import { MOCK_STATIONS } from "../data/mockStations";
 
 export default function MapScreen() {
   const [loading, setLoading] = useState(true);
 
-  // Generate HTML content directly with mock data (no API dependency)
+  // Generate HTML content with all 100 stations
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -85,9 +49,10 @@ export default function MapScreen() {
         .custom-marker-green .marker-pin { background-color: #6ab04c; }
         .custom-marker-red .marker-pin { background-color: #eb4d4b; }
         .custom-marker-blue .marker-pin { background-color: #3498db; }
+        .custom-marker-gray .marker-pin { background-color: #95a5a6; }
         .popup-content {
           padding: 10px;
-          max-width: 200px;
+          max-width: 250px;
         }
         .popup-content h3 {
           margin-top: 0;
@@ -96,6 +61,28 @@ export default function MapScreen() {
         .trend-rising { color: #6ab04c; font-weight: bold; }
         .trend-falling { color: #eb4d4b; font-weight: bold; }
         .trend-stable { color: #3498db; font-weight: bold; }
+        .water-quality {
+          margin-top: 8px;
+          padding-top: 8px;
+          border-top: 1px solid #eee;
+        }
+        .quality-excellent { color: #4CAF50; font-weight: bold; }
+        .quality-good { color: #8BC34A; font-weight: bold; }
+        .quality-fair { color: #FFC107; font-weight: bold; }
+        .quality-poor { color: #F44336; font-weight: bold; }
+        .status-active { color: #4CAF50; }
+        .status-maintenance { color: #FF9800; }
+        .status-inactive { color: #F44336; }
+        .cluster-marker {
+          background: #2196F3;
+          border-radius: 50%;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 12px;
+        }
       </style>
     </head>
     <body>
@@ -108,44 +95,84 @@ export default function MapScreen() {
           attribution: '© OpenStreetMap contributors'
         }).addTo(map);
         
-        // Add markers from mock data
+        // Add markers from mock data (100 stations)
         const stations = ${JSON.stringify(MOCK_STATIONS)};
         
+        // Create marker cluster group for better performance
+        const markers = [];
+        
         stations.forEach(station => {
-          const color = station.trend === 'rising' ? 'green' : 
-                        station.trend === 'falling' ? 'red' : 'blue';
-                        
-          L.marker([station.latitude, station.longitude], {
-            icon: L.divIcon({
-              className: 'custom-marker-' + color,
-              html: '<div class="marker-pin" style="background-color: ' + color + ';"></div>',
-              iconSize: [30, 42],
-              iconAnchor: [15, 42]
-            })
-          }).addTo(map)
-          .bindPopup(
-            '<div class="popup-content">' +
-            '<h3>' + station.name + '</h3>' +
-            '<p><strong>ID:</strong> ' + station.station_id + '</p>' +
-            '<p><strong>Location:</strong> ' + station.district + ', ' + station.state + '</p>' +
-            '<p><strong>Current Level:</strong> ' + station.current_level + ' meters</p>' +
-            '<p><strong>Trend:</strong> <span class="trend-' + station.trend + '">' + station.trend + '</span></p>' +
-            '<p><strong>Last Updated:</strong> ' + new Date(station.last_updated).toLocaleString() + '</p>' +
-            '</div>'
-          );
+          if (station.latitude && station.longitude) {
+            let color = 'gray';
+            if (station.status === 'active') {
+              color = station.trend === 'rising' ? 'green' : 
+                     station.trend === 'falling' ? 'red' : 'blue';
+            }
+            
+            const marker = L.marker([station.latitude, station.longitude], {
+              icon: L.divIcon({
+                className: 'custom-marker-' + color,
+                html: '<div class="marker-pin"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+              })
+            });
+            
+            const popupContent = 
+              '<div class="popup-content">' +
+              '<h3>' + station.name + '</h3>' +
+              '<p><strong>ID:</strong> ' + station.station_id + '</p>' +
+              '<p><strong>Location:</strong> ' + station.district + ', ' + station.state + '</p>' +
+              '<p><strong>Status:</strong> <span class="status-' + station.status + '">' + station.status + '</span></p>' +
+              '<p><strong>Current Level:</strong> ' + station.current_level + ' meters</p>' +
+              '<p><strong>Trend:</strong> <span class="trend-' + station.trend + '">' + station.trend + '</span></p>' +
+              '<div class="water-quality">' +
+              '<p><strong>Water Quality:</strong> <span class="quality-' + station.water_quality.status + '">' + 
+              station.water_quality.status + '</span></p>' +
+              '<p><strong>pH:</strong> ' + station.water_quality.pH.toFixed(1) + '</p>' +
+              '<p><strong>Dissolved Oxygen:</strong> ' + station.water_quality.dissolved_oxygen.toFixed(1) + ' mg/L</p>' +
+              '<p><strong>Quality Index:</strong> ' + station.water_quality.quality_index + '/100</p>' +
+              '</div>' +
+              '<p><strong>Last Updated:</strong> ' + new Date(station.last_updated).toLocaleString() + '</p>' +
+              '</div>';
+            
+            marker.bindPopup(popupContent);
+            marker.addTo(map);
+            markers.push(marker);
+          }
         });
         
         // Add legend
         const legend = L.control({position: 'bottomleft'});
         legend.onAdd = function(map) {
           const div = L.DomUtil.create('div', 'legend');
-          div.innerHTML = '<h4>DWLR Station Status</h4>' +
+          div.innerHTML = '<h4>DWLR Stations (' + stations.length + ')</h4>' +
             '<div><i style="background: #6ab04c"></i> Rising Water Level</div>' +
             '<div><i style="background: #eb4d4b"></i> Falling Water Level</div>' +
-            '<div><i style="background: #3498db"></i> Stable Water Level</div>';
+            '<div><i style="background: #3498db"></i> Stable Water Level</div>' +
+            '<div><i style="background: #95a5a6"></i> Inactive/Maintenance</div>';
           return div;
         };
         legend.addTo(map);
+        
+        // Add stats control
+        const stats = L.control({position: 'topright'});
+        stats.onAdd = function(map) {
+          const div = L.DomUtil.create('div', 'legend');
+          const activeStations = stations.filter(s => s.status === 'active').length;
+          const risingTrend = stations.filter(s => s.trend === 'rising' && s.status === 'active').length;
+          const fallingTrend = stations.filter(s => s.trend === 'falling' && s.status === 'active').length;
+          const stableTrend = stations.filter(s => s.trend === 'stable' && s.status === 'active').length;
+          
+          div.innerHTML = '<h4>Station Statistics</h4>' +
+            '<div><strong>Total:</strong> ' + stations.length + '</div>' +
+            '<div><strong>Active:</strong> ' + activeStations + '</div>' +
+            '<div style="color: #6ab04c;"><strong>Rising:</strong> ' + risingTrend + '</div>' +
+            '<div style="color: #eb4d4b;"><strong>Falling:</strong> ' + fallingTrend + '</div>' +
+            '<div style="color: #3498db;"><strong>Stable:</strong> ' + stableTrend + '</div>';
+          return div;
+        };
+        stats.addTo(map);
       </script>
     </body>
     </html>
@@ -164,7 +191,9 @@ export default function MapScreen() {
           renderLoading={() => (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color="#0000ff" />
-              <Text style={styles.loadingText}>Loading map...</Text>
+              <Text style={styles.loadingText}>
+                Loading 100 DWLR stations...
+              </Text>
             </View>
           )}
         />

@@ -2,12 +2,24 @@ import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Text, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_STATIONS } from "../data/mockStations";
+import { MOCK_STATIONS, DWLRStation } from "../data/mockStations";
+import FilterSearch from "../components/FilterSearch";
 
 export default function MapScreen() {
   const [loading, setLoading] = useState(true);
+  const [filteredStations, setFilteredStations] =
+    useState<DWLRStation[]>(MOCK_STATIONS);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // Generate HTML content with all 100 stations
+  const handleFilter = (stations: DWLRStation[]) => {
+    setFilteredStations(stations);
+  };
+
+  const handleSearch = (term: string) => {
+    setSearchTerm(term);
+  };
+
+  // Generate HTML content with filtered stations
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -73,15 +85,10 @@ export default function MapScreen() {
         .status-active { color: #4CAF50; }
         .status-maintenance { color: #FF9800; }
         .status-inactive { color: #F44336; }
-        .cluster-marker {
-          background: #2196F3;
-          border-radius: 50%;
-          color: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: bold;
-          font-size: 12px;
+        .search-highlight {
+          background-color: #FFEB3B;
+          padding: 2px 4px;
+          border-radius: 3px;
         }
       </style>
     </head>
@@ -95,10 +102,17 @@ export default function MapScreen() {
           attribution: '© OpenStreetMap contributors'
         }).addTo(map);
         
-        // Add markers from mock data (100 stations)
-        const stations = ${JSON.stringify(MOCK_STATIONS)};
+        // Add markers from filtered stations
+        const stations = ${JSON.stringify(filteredStations)};
+        const searchTerm = "${searchTerm}";
         
-        // Create marker cluster group for better performance
+        // Function to highlight search terms
+        function highlightSearchTerm(text, term) {
+          if (!term) return text;
+          const regex = new RegExp(term, 'gi');
+          return text.replace(regex, '<span class="search-highlight">$&</span>');
+        }
+        
         const markers = [];
         
         stations.forEach(station => {
@@ -120,9 +134,9 @@ export default function MapScreen() {
             
             const popupContent = 
               '<div class="popup-content">' +
-              '<h3>' + station.name + '</h3>' +
-              '<p><strong>ID:</strong> ' + station.station_id + '</p>' +
-              '<p><strong>Location:</strong> ' + station.district + ', ' + station.state + '</p>' +
+              '<h3>' + highlightSearchTerm(station.name, searchTerm) + '</h3>' +
+              '<p><strong>ID:</strong> ' + highlightSearchTerm(station.station_id, searchTerm) + '</p>' +
+              '<p><strong>Location:</strong> ' + highlightSearchTerm(station.district + ', ' + station.state, searchTerm) + '</p>' +
               '<p><strong>Status:</strong> <span class="status-' + station.status + '">' + station.status + '</span></p>' +
               '<p><strong>Current Level:</strong> ' + station.current_level + ' meters</p>' +
               '<p><strong>Trend:</strong> <span class="trend-' + station.trend + '">' + station.trend + '</span></p>' +
@@ -142,11 +156,19 @@ export default function MapScreen() {
           }
         });
         
+        // Auto-fit map to show all markers
+        if (markers.length > 0) {
+          const group = new L.featureGroup(markers);
+          map.fitBounds(group.getBounds().pad(0.1));
+        }
+        
         // Add legend
         const legend = L.control({position: 'bottomleft'});
         legend.onAdd = function(map) {
           const div = L.DomUtil.create('div', 'legend');
-          div.innerHTML = '<h4>DWLR Stations (' + stations.length + ')</h4>' +
+          div.innerHTML = '<h4>DWLR Stations (' + stations.length + '/' + ${
+            MOCK_STATIONS.length
+          } + ')</h4>' +
             '<div><i style="background: #6ab04c"></i> Rising Water Level</div>' +
             '<div><i style="background: #eb4d4b"></i> Falling Water Level</div>' +
             '<div><i style="background: #3498db"></i> Stable Water Level</div>' +
@@ -155,24 +177,24 @@ export default function MapScreen() {
         };
         legend.addTo(map);
         
-        // Add stats control
-        const stats = L.control({position: 'topright'});
-        stats.onAdd = function(map) {
+        // Add filter results info
+        const filterInfo = L.control({position: 'topright'});
+        filterInfo.onAdd = function(map) {
           const div = L.DomUtil.create('div', 'legend');
           const activeStations = stations.filter(s => s.status === 'active').length;
           const risingTrend = stations.filter(s => s.trend === 'rising' && s.status === 'active').length;
           const fallingTrend = stations.filter(s => s.trend === 'falling' && s.status === 'active').length;
           const stableTrend = stations.filter(s => s.trend === 'stable' && s.status === 'active').length;
           
-          div.innerHTML = '<h4>Station Statistics</h4>' +
-            '<div><strong>Total:</strong> ' + stations.length + '</div>' +
+          div.innerHTML = '<h4>Filtered Results</h4>' +
+            '<div><strong>Showing:</strong> ' + stations.length + ' stations</div>' +
             '<div><strong>Active:</strong> ' + activeStations + '</div>' +
             '<div style="color: #6ab04c;"><strong>Rising:</strong> ' + risingTrend + '</div>' +
             '<div style="color: #eb4d4b;"><strong>Falling:</strong> ' + fallingTrend + '</div>' +
             '<div style="color: #3498db;"><strong>Stable:</strong> ' + stableTrend + '</div>';
           return div;
         };
-        stats.addTo(map);
+        filterInfo.addTo(map);
       </script>
     </body>
     </html>
@@ -180,7 +202,13 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.container}>
+      <FilterSearch
+        stations={MOCK_STATIONS}
+        onFilter={handleFilter}
+        onSearch={handleSearch}
+      />
+
+      <View style={styles.mapContainer}>
         <WebView
           source={{ html: htmlContent }}
           style={styles.webview}
@@ -192,7 +220,7 @@ export default function MapScreen() {
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color="#0000ff" />
               <Text style={styles.loadingText}>
-                Loading 100 DWLR stations...
+                Loading {filteredStations.length} DWLR stations...
               </Text>
             </View>
           )}
@@ -206,6 +234,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+  },
+  mapContainer: {
+    flex: 1,
   },
   webview: {
     flex: 1,
